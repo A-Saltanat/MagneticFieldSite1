@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Магниттік өріс - Түсініктемелермен</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; background-color: #1e1e1e; }
+        canvas { display: block; }
+        .content { position: absolute; top: 10px; left: 10px; color: #fff; z-index: 10; }
+        h1 { font-size: 24px; margin-bottom: 10px; }
+        .description { font-size: 14px; margin-bottom: 20px; max-width: 600px; }
+        .input-container { margin-bottom: 20px; }
+        .output-container { margin-top: 20px; }
+        input[type="number"] {
+            width: 100px;
+            margin-right: 10px;
+            padding: 5px;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .highlight {
+            color: #ff6347;
+        }
+        #chart-container {
+            width: 100%;
+            height: 400px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="content">
+    <h1>Магниттік өріс (3D Визуализация)</h1>
+
+    <div class="description">
+        <p><strong>Теория:</strong> Бұл визуализация ток өткізгішінің айналасындағы магниттік өрісті көрсетеді. 
+        Ток өткізгіші арқылы өтетін ток магниттік өріс жасайды, ал бұл өріс Био-Савара заңы бойынша есептеледі. 
+        Токтың күшін, қашықтықты енгізгенде магниттік өріс пен оның бағыты өзгеріп отырады.
+        <br><br>
+        <code>B = (μ₀ * I) / (2 * π * r)</code>
+        <br><br>
+        <span class="highlight">μ₀</span> — вакуумның магниттік өткізгіштігі (4π × 10<sup>-7</sup> Н/А²),
+        <br><span class="highlight">I</span> — ток күшінің мәні,
+        <br><span class="highlight">r</span> — өткізгіштен бақылау нүктесіне дейінгі қашықтық.
+        </p>
+    </div>
+
+    <div class="input-container">
+        <label for="current">Ток (I, ампер): </label>
+        <input type="number" id="current" value="1" step="any" required>
+        <label for="distance">Қашықтық (r, метр): </label>
+        <input type="number" id="distance" value="3" step="any" required>
+        <button onclick="updateField()">Өрісті жаңарту</button>
+    </div>
+
+    <div class="output-container">
+        <p><strong>Магниттік өріс мәні (B):</strong> <span id="magneticFieldValue">0</span> Тесла</p>
+    </div>
+
+    <div id="magneticFieldExplanation" class="description">
+        <p><strong>Магниттік өріс өзгерісі:</strong> Ток күші мен қашықтық өскен сайын магниттік өріс күші өзгереді. Бұл өзгеріс бағыты мен ұзындығы арқылы анықталады.
+        Өріс векторларының бағыты - оңнан солға қарай, токтың бағытына перпендикуляр болады. Көрсетілген өріс күшінің мәні магниттік өрістің амплитудасын білдіреді.</p>
+    </div>
+
+    <!-- График для магнитного поля -->
+    <div id="chart-container">
+        <canvas id="fieldChart"></canvas>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let scene, camera, renderer, cylinder, magneticLinesGroup;
+    let angleOffset = 0;
+    let chart;
+
+    // Инициализация сцены
+    function init() {
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+        renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Создание цилиндра, представляющего проводник с током
+        const geometry = new THREE.CylinderGeometry(0.1, 0.1, 10, 32);
+        const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        cylinder = new THREE.Mesh(geometry, material);
+        cylinder.rotation.x = Math.PI / 2;
+        scene.add(cylinder);
+
+        // Группа для линий магнитного поля
+        magneticLinesGroup = new THREE.Group();
+        scene.add(magneticLinesGroup);
+
+        // Позиция камеры
+        camera.position.z = 20;
+
+        animate();
+    }
+
+    // Анимация сцены
+    function animate() {
+        requestAnimationFrame(animate);
+        magneticLinesGroup.rotation.y = angleOffset;
+        angleOffset += 0.01;
+
+        renderer.render(scene, camera);
+    }
+
+    // Функция обновления магнитного поля и графика
+    function updateField() {
+        const I = parseFloat(document.getElementById('current').value);
+        const r = parseFloat(document.getElementById('distance').value);
+
+        if (isNaN(I) || isNaN(r) || r <= 0 || I <= 0) {
+            alert("Өтініш, ток пен қашықтық үшін дұрыс мәндерді енгізіңіз.");
+            return;
+        }
+
+        // Очистим старые линии
+        magneticLinesGroup.clear();
+
+        // Используем формулу Био-Савара для расчёта магнитного поля
+        const mu0 = 4 * Math.PI * 10 ** -7;
+        const magneticField = (mu0 * I) / (2 * Math.PI * r);
+        document.getElementById('magneticFieldValue').textContent = magneticField.toFixed(8); // Выводим магнитное поле
+
+        // Ограничение максимального значения для r
+        const MAX_DISTANCE = 50;
+        const clampedDistance = Math.min(r, MAX_DISTANCE);
+
+        // Изменяем позицию камеры в зависимости от расстояния
+        camera.position.z = Math.max(clampedDistance + 10, 20);
+
+        // Количество колец магнитного поля
+        const numRings = 10;
+        const angleStep = 360 / numRings;
+
+        // Создаем кольцевые линии магнитного поля
+        for (let i = 0; i < numRings; i++) {
+            const angle = i * angleStep;
+            const rad = angle * (Math.PI / 180);
+            const yOffset = Math.sin(i * Math.PI / numRings) * 2;
+            const x = Math.cos(rad) * clampedDistance;
+            const z = Math.sin(rad) * clampedDistance;
+
+            // Создаем кольцевую линию магнитного поля
+            const points = [];
+            const numPoints = 50;
+
+            for (let j = 0; j < numPoints; j++) {
+                const angleOffset = (j / numPoints) * Math.PI * 2;
+                points.push(new THREE.Vector3(
+                    x + Math.cos(angle + angleOffset) * 0.5,
+                    yOffset,
+                    z + Math.sin(angle + angleOffset) * 0.5
+                ));
+            }
+
+            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+            const line = new THREE.Line(lineGeometry, lineMaterial);
+
+            magneticLinesGroup.add(line);
+
+            // Добавляем стрелки для отображения вектора магнитного поля
+            const arrowHelper = new THREE.ArrowHelper(
+                new THREE.Vector3(x, yOffset, z).normalize(),
+                new THREE.Vector3(0, 0, 0),
+                4,  // Увеличена длина стрелки
+                0xff6347,  // цвет стрелки
+                1,          // Увеличена толщина стрелки
+                0.1         // Увеличен размер головки стрелки
+            );
+            magneticLinesGroup.add(arrowHelper);
+        }
+
+        // Обновляем график
+        updateChart(I, r, magneticField);
+    }
+
+    // Инициализация графика
+    function initChart() {
+const ctx = document.getElementById('fieldChart').getContext('2d');
+
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['0', '1', '2', '3', '4', '5'],
+                datasets: [{
+                    label: 'Магниттік өріс (Т)',
+                    data: [0, 0, 0, 0, 0, 0],
+                    borderColor: '#ff6347',
+                    backgroundColor: 'rgba(255, 99, 71, 0.2)',
+                    fill: true,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Қашықтық (м)'
+                        },
+                        beginAtZero: true
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Магниттік өріс (Т)'
+                        },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    // Обновление данных графика
+    function updateChart(I, r, B) {
+        const dataset = chart.data.datasets[0];
+
+        // Сдвиг данных, чтобы добавить новый результат
+        dataset.data.push(B);
+        if (dataset.data.length > 6) {
+            dataset.data.shift(); // Удаляем самые старые данные
+        }
+
+        // Добавление нового значения на ось X
+        chart.data.labels.push(r);
+        if (chart.data.labels.length > 6) {
+            chart.data.labels.shift(); // Удаляем самые старые метки
+        }
+
+        // Обновление графика
+        chart.update();
+    }
+
+    // Запуск и инициализация
+    window.onload = () => {
+        init();
+        initChart();
+    };
+</script>
+
+</body>
+</html>
